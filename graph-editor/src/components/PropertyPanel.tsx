@@ -1,0 +1,250 @@
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Input, Select, Divider, Tabs, Button, Space } from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useGraphStore } from '../store/graphStore';
+import { Edge, Node } from '@xyflow/react';
+import { Port } from '../types/graph';
+
+interface PropertyPanelProps {
+  selectedElement: Node | Edge | null;
+  onClose: () => void;
+}
+
+const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement, onClose }) => {
+  const [form] = Form.useForm();
+  const { updateNode, updateEdge } = useGraphStore();
+  const [visible, setVisible] = useState(false);
+  const [ports, setPorts] = useState<Port[]>([]);
+
+  useEffect(() => {
+    if (selectedElement) {
+      setVisible(true);
+      if ('source' in selectedElement) {
+        const edge = selectedElement as Edge;
+        form.setFieldsValue({
+          label: edge.data?.label || '',
+          gain: edge.data?.gain || '',
+          direction: edge.data?.direction || 'forward',
+          signalType: edge.data?.signalType || '',
+          delay: edge.data?.delay || '',
+          weight: edge.data?.weight ?? '',
+          condition: edge.data?.condition || '',
+          customDescription: edge.data?.customDescription || '',
+        });
+        setPorts([]);
+      } else {
+        const node = selectedElement as Node;
+        form.setFieldsValue({
+          label: node.data?.label || '',
+          description: node.data?.description || '',
+        });
+        setPorts(node.data?.ports || [
+          { id: 'in1', label: '输入', type: 'input' },
+          { id: 'out1', label: '输出', type: 'output' },
+        ]);
+      }
+    } else {
+      setVisible(false);
+      setPorts([]);
+    }
+  }, [selectedElement, form]);
+
+  const handleSave = () => {
+    form.validateFields().then(values => {
+      if (!selectedElement) return;
+
+      console.log('[PropertyPanel] handleSave called');
+      console.log('[PropertyPanel] selectedElement:', selectedElement);
+      console.log('[PropertyPanel] form values:', values);
+      console.log('[PropertyPanel] ports:', ports);
+
+      if ('source' in selectedElement) {
+        console.log('[PropertyPanel] Updating edge:', selectedElement.id, values);
+        updateEdge(selectedElement.id, values);
+      } else {
+        const updateData = { ...values, ports };
+        console.log('[PropertyPanel] Updating node:', selectedElement.id, updateData);
+        updateNode(selectedElement.id, updateData);
+      }
+      setVisible(false);
+      onClose();
+    });
+  };
+
+  const addPort = (type: 'input' | 'output') => {
+    const newPort: Port = {
+      id: `${type}${Date.now()}`,
+      label: type === 'input' ? `输入${ports.filter(p => p.type === 'input').length + 1}` : `输出${ports.filter(p => p.type === 'output').length + 1}`,
+      type,
+    };
+    setPorts([...ports, newPort]);
+  };
+
+  const removePort = (id: string) => {
+    setPorts(ports.filter(p => p.id !== id));
+  };
+
+  const updatePort = (id: string, field: keyof Port, value: string) => {
+    setPorts(ports.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  const isEdge = selectedElement && 'source' in selectedElement;
+  const inputPorts = ports.filter(p => p.type === 'input');
+  const outputPorts = ports.filter(p => p.type === 'output');
+
+  return (
+    <Modal
+      title={isEdge ? '连线属性' : '节点属性'}
+      open={visible}
+      onOk={handleSave}
+      onCancel={() => {
+        setVisible(false);
+        onClose();
+      }}
+      okText="保存"
+      cancelText="取消"
+      width={600}
+    >
+      <Form form={form} layout="vertical">
+        <Form.Item name="label" label="标签">
+          <Input placeholder="输入标签名称" />
+        </Form.Item>
+
+        {!isEdge && (
+          <>
+            <Form.Item name="description" label="描述">
+              <Input.TextArea rows={2} placeholder="输入节点描述（将出现在自然语言导出中）" />
+            </Form.Item>
+
+            <Divider orientation="left">端口配置</Divider>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">输入端口</span>
+                  <Button
+                    type="dashed"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => addPort('input')}
+                  >
+                    添加
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {inputPorts.map((port) => (
+                    <div key={port.id} className="flex items-center gap-2">
+                      <Input
+                        value={port.label}
+                        onChange={(e) => updatePort(port.id, 'label', e.target.value)}
+                        placeholder="端口名称"
+                        size="small"
+                      />
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={() => removePort(port.id)}
+                      />
+                    </div>
+                  ))}
+                  {inputPorts.length === 0 && (
+                    <div className="text-xs text-gray-400 text-center py-2">暂无输入端口</div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">输出端口</span>
+                  <Button
+                    type="dashed"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => addPort('output')}
+                  >
+                    添加
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {outputPorts.map((port) => (
+                    <div key={port.id} className="flex items-center gap-2">
+                      <Input
+                        value={port.label}
+                        onChange={(e) => updatePort(port.id, 'label', e.target.value)}
+                        placeholder="端口名称"
+                        size="small"
+                      />
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={() => removePort(port.id)}
+                      />
+                    </div>
+                  ))}
+                  {outputPorts.length === 0 && (
+                    <div className="text-xs text-gray-400 text-center py-2">暂无输出端口</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {isEdge && (
+          <>
+            <Divider orientation="left">连线元数据</Divider>
+            
+            <Form.Item name="direction" label="方向">
+              <Select placeholder="选择方向">
+                <Select.Option value="forward">正向</Select.Option>
+                <Select.Option value="backward">反向</Select.Option>
+                <Select.Option value="bidirectional">双向</Select.Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item name="signalType" label="类型">
+              <Select placeholder="选择类型">
+                <Select.Option value="feedback">反馈</Select.Option>
+                <Select.Option value="input">输入</Select.Option>
+                <Select.Option value="output">输出</Select.Option>
+                <Select.Option value="control">控制</Select.Option>
+                <Select.Option value="data">数据</Select.Option>
+                <Select.Option value="trigger">触发</Select.Option>
+                <Select.Option value="event">事件</Select.Option>
+                <Select.Option value="condition">条件</Select.Option>
+              </Select>
+            </Form.Item>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Form.Item name="gain" label="增益/系数">
+                <Input placeholder="如: +1, -1, 0.5" />
+              </Form.Item>
+
+              <Form.Item name="weight" label="权重">
+                <Input placeholder="数值" type="number" />
+              </Form.Item>
+            </div>
+
+            <Form.Item name="delay" label="延迟">
+              <Input placeholder="例如: 10ms, 2s" />
+            </Form.Item>
+
+            <Form.Item name="condition" label="条件">
+              <Input placeholder="例如: x > 0, 温度 > 阈值" />
+            </Form.Item>
+
+            <Form.Item name="customDescription" label="自定义描述">
+              <Input.TextArea rows={2} placeholder="自定义描述文本（将直接出现在自然语言导出中）" />
+            </Form.Item>
+          </>
+        )}
+      </Form>
+    </Modal>
+  );
+};
+
+export default PropertyPanel;
