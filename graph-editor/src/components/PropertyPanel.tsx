@@ -12,9 +12,29 @@ interface PropertyPanelProps {
 
 const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement, onClose }) => {
   const [form] = Form.useForm();
-  const { updateNode, updateEdge } = useGraphStore();
+  const { updateNode, updateEdge, graphData } = useGraphStore();
   const [visible, setVisible] = useState(false);
   const [ports, setPorts] = useState<Port[]>([]);
+
+  const connectionDescription = React.useMemo(() => {
+    if (!selectedElement || !('source' in selectedElement)) return '';
+    const edge = selectedElement as Edge;
+    const sourceNode = graphData.nodes.find(n => n.id === edge.source);
+    const targetNode = graphData.nodes.find(n => n.id === edge.target);
+
+    const getPortLabel = (node: typeof sourceNode, handleId: string | null | undefined) => {
+      if (!node || !handleId) return '';
+      const port = node.data?.ports?.find((p: Port) => p.id === handleId);
+      return port ? port.label : handleId;
+    };
+
+    const sourceLabel = sourceNode?.data?.label || edge.source;
+    const targetLabel = targetNode?.data?.label || edge.target;
+    const sourcePort = getPortLabel(sourceNode, edge.sourceHandle);
+    const targetPort = getPortLabel(targetNode, edge.targetHandle);
+
+    return `${sourceLabel} 的 ${sourcePort} → ${targetLabel} 的 ${targetPort}`;
+  }, [selectedElement, graphData.nodes]);
 
   useEffect(() => {
     if (selectedElement) {
@@ -106,6 +126,13 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement, onClose 
       width={600}
     >
       <Form form={form} layout="vertical">
+        {isEdge && connectionDescription && (
+          <div className="mb-4 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+            <span className="font-medium">连接关系：</span>
+            {connectionDescription}
+          </div>
+        )}
+
         <Form.Item name="label" label="标签">
           <Input placeholder="输入标签名称" />
         </Form.Item>

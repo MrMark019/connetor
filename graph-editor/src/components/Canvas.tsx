@@ -490,11 +490,15 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
   }, [isSelecting, selectionBox, nodes, edges, screenToFlowPosition, setNodes, setEdges, onSelectionChange]);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    const target = event.target as HTMLElement;
-    const isInputFocused = target.tagName === 'INPUT' || 
-                           target.tagName === 'TEXTAREA' || 
-                           target.isContentEditable;
-    
+    const activeElement = document.activeElement as HTMLElement | null;
+    const isInputFocused = activeElement && (
+      activeElement.tagName === 'INPUT' ||
+      activeElement.tagName === 'TEXTAREA' ||
+      activeElement.isContentEditable ||
+      activeElement.closest('input') !== null ||
+      activeElement.closest('textarea') !== null
+    );
+
     if (isInputFocused) return;
 
     if ((event.ctrlKey || event.metaKey) && event.key === 'z') {

@@ -6,13 +6,13 @@ echo.
 
 cd /d "%~dp0graph-editor"
 
-echo [1/2] Starting dev server...
-start "GraphEditor" cmd /k "npm run dev"
+echo [1/2] Starting dev server on port 5173...
+start "GraphEditor" cmd /k "npm run dev -- --port 5173 --strictPort"
 
-echo [2/2] Opening browser...
-timeout /t 3 /nobreak >nul
+echo [2/2] Waiting for server and opening browser...
+timeout /t 4 /nobreak >nul
 
-start http://localhost:5174/
+start http://localhost:5173/
 
 echo.
 echo ========================================
