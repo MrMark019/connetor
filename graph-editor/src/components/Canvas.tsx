@@ -171,7 +171,17 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
           return canvasNode && JSON.stringify(storeNode.data) !== JSON.stringify(canvasNode.data);
         });
 
-        if (hasNewNodes || hasDeletedNodes) {
+        const storeEdgeIds = new Set(graphData.edges.map(e => e.id));
+        const canvasEdgeIds = new Set(edgesRef.current.map(e => e.id));
+        const hasNewEdges = graphData.edges.some(e => !canvasEdgeIds.has(e.id));
+        const hasDeletedEdges = edgesRef.current.some(e => !storeEdgeIds.has(e.id));
+        const hasUpdatedEdges = graphData.edges.some(storeEdge => {
+          const canvasEdge = edgesRef.current.find(e => e.id === storeEdge.id);
+          return canvasEdge && JSON.stringify(storeEdge.data) !== JSON.stringify(canvasEdge.data);
+        });
+        console.log('[Canvas] Edge changes - new:', hasNewEdges, 'deleted:', hasDeletedEdges, 'updated:', hasUpdatedEdges);
+
+        if (hasNewNodes || hasDeletedNodes || hasNewEdges || hasDeletedEdges) {
           console.log('[Canvas] Full sync - new:', hasNewNodes, 'deleted:', hasDeletedNodes);
           
           const newNodes = graphData.nodes.map(n => ({
@@ -194,9 +204,9 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
 
           setNodes(newNodes);
           setEdges(newEdges);
-        } else if (hasUpdatedNodes) {
+        } else if (hasUpdatedNodes || hasUpdatedEdges) {
           console.log('[Canvas] Syncing data updates only');
-          
+
           setNodes((nds) =>
             nds.map((n) => {
               const storeNode = graphData.nodes.find((gn) => gn.id === n.id);
@@ -244,7 +254,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
       nodes: currentNodes,
       edges: currentEdges,
       meta: graphDataRef.current.meta || {},
-    });
+    }, true);
   }, [setGraphData]);
 
   const onConnect = useCallback(
@@ -280,7 +290,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
               nodes: currentNodes,
               edges: currentEdges,
               meta: graphDataRef.current.meta || {},
-            });
+            }, true);
             return nds;
           });
         }, 0);
@@ -339,7 +349,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
           position: newNode.position,
           data: newNode.data,
         }],
-      });
+      }, true);
     },
     [setNodes, screenToFlowPosition, setGraphData, pushHistory]
   );
@@ -400,6 +410,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
       const targetNode = nodesRef.current.find(n => n.id === contextMenu.nodeId);
       if (!targetNode) return;
 
+      pushHistory();
       const newNodes = clipboard.map(node => {
         const newId = `${node.type}${nodeIdCounter.current++}`;
         return {
@@ -426,10 +437,10 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
             data: n.data,
           })),
         ],
-      });
+      }, true);
     }
     setContextMenu(null);
-  }, [clipboard, contextMenu, setNodes, setGraphData]);
+  }, [clipboard, contextMenu, setNodes, setGraphData, pushHistory]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent) => {
     if (event.button === 2) {
@@ -596,7 +607,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
               data: n.data,
             })),
           ],
-        });
+        }, true);
       }
       return;
     }
@@ -609,35 +620,69 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
         setNodes((nds) => {
           const updatedNodes = nds.filter(n => !selectedIds.nodeIds.has(n.id));
           console.log('[Delete] Nodes after filter:', updatedNodes.map(n => n.id));
-          setTimeout(() => {
-            console.log('[Delete] Syncing to store, graphDataRef nodes:', graphDataRef.current.nodes.map(n => n.id));
-            setGraphData({
-              ...graphDataRef.current,
-              nodes: graphDataRef.current.nodes.filter(n => !selectedIds.nodeIds.has(n.id)),
-              edges: graphDataRef.current.edges.filter(e =>
-                !selectedIds.nodeIds.has(e.source) &&
-                !selectedIds.nodeIds.has(e.target) &&
-                !selectedIds.edgeIds.has(e.id)
-              ),
-            });
-          }, 0);
           return updatedNodes;
         });
-        setEdges((eds) => eds.filter(e =>
-          !selectedIds.nodeIds.has(e.source) &&
-          !selectedIds.nodeIds.has(e.target) &&
-          !selectedIds.edgeIds.has(e.id)
-        ));
+        setEdges((eds) => {
+          const updatedEdges = eds.filter(e =>
+            !selectedIds.nodeIds.has(e.source) &&
+            !selectedIds.nodeIds.has(e.target) &&
+            !selectedIds.edgeIds.has(e.id)
+          );
+          setTimeout(() => {
+            const currentNodes = nodesRef.current.filter(n => !selectedIds.nodeIds.has(n.id));
+            const currentEdges = edgesRef.current.filter(e =>
+              !selectedIds.nodeIds.has(e.source) &&
+              !selectedIds.nodeIds.has(e.target) &&
+              !selectedIds.edgeIds.has(e.id)
+            );
+            console.log('[Delete] Syncing to store, nodes:', currentNodes.map(n => n.id), 'edges:', currentEdges.map(e => e.id));
+            setGraphData({
+              nodes: currentNodes.map(n => ({
+                id: n.id,
+                type: n.type || 'default',
+                label: n.data?.label || n.id,
+                position: n.position,
+                data: n.data,
+              })),
+              edges: currentEdges.map(e => ({
+                id: e.id,
+                source: e.source,
+                target: e.target,
+                sourceHandle: e.sourceHandle,
+                targetHandle: e.targetHandle,
+                data: e.data || {},
+              })),
+              meta: graphDataRef.current.meta || {},
+            }, true);
+          }, 0);
+          return updatedEdges;
+        });
       } else if (selectedIds.edgeIds.size > 0) {
         console.log('[Delete] Deleting edges:', Array.from(selectedIds.edgeIds));
         pushHistory();
         setEdges((eds) => {
           const updatedEdges = eds.filter(e => !selectedIds.edgeIds.has(e.id));
           setTimeout(() => {
+            const currentEdges = edgesRef.current.filter(e => !selectedIds.edgeIds.has(e.id));
+            console.log('[Delete] Syncing edge delete to store, remaining edges:', currentEdges.map(e => e.id));
             setGraphData({
-              ...graphDataRef.current,
-              edges: graphDataRef.current.edges.filter(e => !selectedIds.edgeIds.has(e.id)),
-            });
+              nodes: nodesRef.current.map(n => ({
+                id: n.id,
+                type: n.type || 'default',
+                label: n.data?.label || n.id,
+                position: n.position,
+                data: n.data,
+              })),
+              edges: currentEdges.map(e => ({
+                id: e.id,
+                source: e.source,
+                target: e.target,
+                sourceHandle: e.sourceHandle,
+                targetHandle: e.targetHandle,
+                data: e.data || {},
+              })),
+              meta: graphDataRef.current.meta || {},
+            }, true);
           }, 0);
           return updatedEdges;
         });
