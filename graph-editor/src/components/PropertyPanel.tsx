@@ -127,7 +127,7 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement, onClose 
     >
       <Form form={form} layout="vertical">
         {isEdge && connectionDescription && (
-          <div className="mb-4 px-3 py-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+          <div className="mb-4 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded text-sm text-blue-800 dark:text-blue-300">
             <span className="font-medium">连接关系：</span>
             {connectionDescription}
           </div>

@@ -20,6 +20,7 @@ import AndGateNode from './AndGateNode';
 import CustomModuleNode from './CustomModuleNode';
 import CustomEdge from './CustomEdge';
 import { useGraphStore } from '../store/graphStore';
+import { GraphData } from '../types/graph';
 
 const nodeTypes = {
   resistor: ResistorNode,
@@ -46,9 +47,9 @@ interface CanvasProps {
 const SelectionInfo: React.FC<{ selectedNodes: number; selectedEdges: number }> = ({ selectedNodes, selectedEdges }) => {
   if (selectedNodes === 0 && selectedEdges === 0) return null;
   return (
-    <div className="bg-white px-3 py-1.5 rounded shadow text-xs text-gray-600">
+    <div className="bg-white dark:bg-gray-800 px-3 py-1.5 rounded shadow text-xs text-gray-600 dark:text-gray-300">
       已选中: {selectedNodes} 个节点, {selectedEdges} 条连线
-      <span className="ml-2 text-blue-600">Ctrl+C 复制 | Ctrl+V 粘贴 | Ctrl+Z 撤销 | Delete 删除</span>
+      <span className="ml-2 text-blue-600 dark:text-blue-400">Ctrl+C 复制 | Ctrl+V 粘贴 | Ctrl+Z 撤销 | Ctrl+Y 重做 | Delete 删除</span>
     </div>
   );
 };
@@ -71,6 +72,8 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [history, setHistory] = useState<GraphData[]>([]);
   const historyRef = useRef<GraphData[]>([]);
+  const [redo, setRedo] = useState<GraphData[]>([]);
+  const redoRef = useRef<GraphData[]>([]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -96,19 +99,33 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
   }, [history]);
 
   useEffect(() => {
+    redoRef.current = redo;
+  }, [redo]);
+
+  useEffect(() => {
     setOnBeforeChange(() => {
+      const snapshot = JSON.parse(JSON.stringify(graphDataRef.current));
+      console.log('[History] Auto-saved state - nodes:', snapshot.nodes.length, 'edges:', snapshot.edges.length);
+      console.log('[History] Node IDs:', snapshot.nodes.map((n: any) => n.id));
       setHistory((prev) => {
-        const newHistory = [...prev, JSON.parse(JSON.stringify(graphDataRef.current))];
+        const newHistory = [...prev, snapshot];
+        console.log('[History] Stack size:', newHistory.length);
         return newHistory.slice(-50);
       });
+      setRedo([]);
     });
   }, [setOnBeforeChange]);
 
   const pushHistory = useCallback(() => {
+    const snapshot = JSON.parse(JSON.stringify(graphDataRef.current));
+    console.log('[History] Manual push - nodes:', snapshot.nodes.length, 'edges:', snapshot.edges.length);
+    console.log('[History] Node IDs:', snapshot.nodes.map((n: any) => n.id));
     setHistory((prev) => {
-      const newHistory = [...prev, JSON.parse(JSON.stringify(graphDataRef.current))];
+      const newHistory = [...prev, snapshot];
+      console.log('[History] Stack size:', newHistory.length);
       return newHistory.slice(-50);
     });
+    setRedo([]);
   }, []);
 
   useEffect(() => {
@@ -501,12 +518,42 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
 
     if (isInputFocused) return;
 
-    if ((event.ctrlKey || event.metaKey) && event.key === 'z') {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
       event.preventDefault();
+      console.log('[Undo] Ctrl+Z pressed');
+      console.log('[Undo] history length:', historyRef.current.length);
+      console.log('[Undo] redo length:', redoRef.current.length);
       if (historyRef.current.length > 0) {
         const prevState = historyRef.current[historyRef.current.length - 1];
+        const currentState = JSON.parse(JSON.stringify(graphDataRef.current));
+        console.log('[Undo] Restoring state - nodes:', prevState.nodes.length, 'edges:', prevState.edges.length);
+        console.log('[Undo] Current state - nodes:', currentState.nodes.length, 'edges:', currentState.edges.length);
+        console.log('[Undo] Node IDs in prev:', prevState.nodes.map((n: any) => n.id));
+        console.log('[Undo] Node IDs in current:', currentState.nodes.map((n: any) => n.id));
+        setRedo((prev) => [...prev, currentState]);
         setHistory((prev) => prev.slice(0, -1));
-        setGraphData(prevState);
+        setGraphData(prevState, true);
+      } else {
+        console.log('[Undo] History is empty, nothing to undo');
+      }
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
+      event.preventDefault();
+      console.log('[Redo] Ctrl+Y pressed');
+      console.log('[Redo] history length:', historyRef.current.length);
+      console.log('[Redo] redo length:', redoRef.current.length);
+      if (redoRef.current.length > 0) {
+        const nextState = redoRef.current[redoRef.current.length - 1];
+        const currentState = JSON.parse(JSON.stringify(graphDataRef.current));
+        console.log('[Redo] Restoring state - nodes:', nextState.nodes.length, 'edges:', nextState.edges.length);
+        console.log('[Redo] Current state - nodes:', currentState.nodes.length, 'edges:', currentState.edges.length);
+        setHistory((prev) => [...prev.slice(-49), currentState]);
+        setRedo((prev) => prev.slice(0, -1));
+        setGraphData(nextState, true);
+      } else {
+        console.log('[Redo] Redo stack is empty, nothing to redo');
       }
       return;
     }
@@ -556,28 +603,33 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (selectedIds.nodeIds.size > 0) {
+        console.log('[Delete] Deleting nodes:', Array.from(selectedIds.nodeIds));
+        console.log('[Delete] Current canvas nodes:', nodesRef.current.map(n => n.id));
         pushHistory();
         setNodes((nds) => {
           const updatedNodes = nds.filter(n => !selectedIds.nodeIds.has(n.id));
+          console.log('[Delete] Nodes after filter:', updatedNodes.map(n => n.id));
           setTimeout(() => {
+            console.log('[Delete] Syncing to store, graphDataRef nodes:', graphDataRef.current.nodes.map(n => n.id));
             setGraphData({
               ...graphDataRef.current,
               nodes: graphDataRef.current.nodes.filter(n => !selectedIds.nodeIds.has(n.id)),
-              edges: graphDataRef.current.edges.filter(e => 
-                !selectedIds.nodeIds.has(e.source) && 
-                !selectedIds.nodeIds.has(e.target) && 
+              edges: graphDataRef.current.edges.filter(e =>
+                !selectedIds.nodeIds.has(e.source) &&
+                !selectedIds.nodeIds.has(e.target) &&
                 !selectedIds.edgeIds.has(e.id)
               ),
             });
           }, 0);
           return updatedNodes;
         });
-        setEdges((eds) => eds.filter(e => 
-          !selectedIds.nodeIds.has(e.source) && 
-          !selectedIds.nodeIds.has(e.target) && 
+        setEdges((eds) => eds.filter(e =>
+          !selectedIds.nodeIds.has(e.source) &&
+          !selectedIds.nodeIds.has(e.target) &&
           !selectedIds.edgeIds.has(e.id)
         ));
       } else if (selectedIds.edgeIds.size > 0) {
+        console.log('[Delete] Deleting edges:', Array.from(selectedIds.edgeIds));
         pushHistory();
         setEdges((eds) => {
           const updatedEdges = eds.filter(e => !selectedIds.edgeIds.has(e.id));
@@ -663,7 +715,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
             width: selectionBox.width,
             height: selectionBox.height,
             border: '2px dashed rgba(59, 130, 246, 0.8)',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            backgroundColor: 'rgba(59, 130, 246, 0.15)',
             borderRadius: '4px',
           }}
         />
@@ -671,7 +723,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
 
       {contextMenu && (
         <div
-          className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[120px]"
+          className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1 min-w-[120px]"
           style={{
             left: contextMenu.x,
             top: contextMenu.y,
@@ -679,13 +731,13 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
           data-context-menu
         >
           <button
-            className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-800 dark:text-gray-200"
             onClick={handleCopyFromContext}
           >
             <span>📋</span> 复制
           </button>
           <button
-            className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 flex items-center gap-2 disabled:text-gray-400 disabled:cursor-not-allowed"
+            className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed text-gray-800 dark:text-gray-200"
             onClick={handlePasteFromContext}
             disabled={clipboard.length === 0}
           >

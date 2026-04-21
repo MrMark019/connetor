@@ -3,7 +3,7 @@ import { GraphData } from '../types/graph';
 
 interface GraphStore {
   graphData: GraphData;
-  setGraphData: (data: GraphData) => void;
+  setGraphData: (data: GraphData, skipHistory?: boolean) => void;
   addNode: (node: GraphData['nodes'][0]) => void;
   updateNode: (id: string, data: Partial<GraphData['nodes'][0]>) => void;
   removeNode: (id: string) => void;
@@ -47,8 +47,11 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   
   setOnBeforeChange: (callback) => set({ onBeforeChange: callback }),
   
-  setGraphData: (data) => {
-    get().onBeforeChange?.();
+  setGraphData: (data, skipHistory = false) => {
+    console.log('[Store] setGraphData - skipHistory:', skipHistory, 'nodes:', data.nodes.length, 'edges:', data.edges.length);
+    if (!skipHistory) {
+      get().onBeforeChange?.();
+    }
     set({ graphData: data });
   },
   

@@ -29,8 +29,8 @@ const CustomModuleNode: React.FC<CustomModuleNodeProps> = ({ data, selected }) =
   };
 
   return (
-    <div 
-      className={`bg-white border-2 rounded-lg relative ${selected ? 'border-blue-500' : 'border-gray-300'}`}
+    <div
+      className={`bg-white dark:bg-gray-800 border-2 rounded-lg relative ${selected ? 'border-blue-500 dark:border-blue-400' : 'border-gray-300 dark:border-gray-600'}`}
       style={{ width: '160px', height: `${nodeHeight}px` }}
     >
       {inputPorts.map((port, index) => (
@@ -51,19 +51,19 @@ const CustomModuleNode: React.FC<CustomModuleNodeProps> = ({ data, selected }) =
             className="!bg-purple-500 !w-3 !h-3"
             style={{ left: '-6px' }}
           />
-          <span className="text-xs text-gray-600 ml-3 whitespace-nowrap">{port.label}</span>
+          <span className="text-xs text-gray-600 dark:text-gray-400 ml-3 whitespace-nowrap">{port.label}</span>
         </div>
       ))}
 
       <div className="flex flex-col items-center justify-center h-full gap-1 px-8">
-        <div className="w-14 h-10 border-2 border-purple-500 rounded flex items-center justify-center bg-purple-50">
-          <span className="text-purple-700 font-bold text-sm">M</span>
+        <div className="w-14 h-10 border-2 border-purple-500 rounded flex items-center justify-center bg-purple-50 dark:bg-purple-900/30">
+          <span className="text-purple-700 dark:text-purple-300 font-bold text-sm">M</span>
         </div>
-        <span className="text-xs font-medium text-gray-800 text-center leading-tight break-all">{data.label}</span>
+        <span className="text-xs font-medium text-gray-800 dark:text-gray-200 text-center leading-tight break-all">{data.label}</span>
       </div>
 
       {outputPorts.map((port, index) => (
-        <div 
+        <div
           key={port.id}
           className="flex items-center flex-row-reverse"
           style={{
@@ -80,7 +80,7 @@ const CustomModuleNode: React.FC<CustomModuleNodeProps> = ({ data, selected }) =
             className="!bg-purple-500 !w-3 !h-3"
             style={{ right: '-6px' }}
           />
-          <span className="text-xs text-gray-600 mr-3 whitespace-nowrap">{port.label}</span>
+          <span className="text-xs text-gray-600 dark:text-gray-400 mr-3 whitespace-nowrap">{port.label}</span>
         </div>
       ))}
     </div>

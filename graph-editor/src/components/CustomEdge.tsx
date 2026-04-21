@@ -46,9 +46,9 @@ const CustomEdge: React.FC<CustomEdgeProps> = ({
           }}
           className="nodrag nopan"
         >
-          <div className="bg-white px-2 py-1 rounded text-xs shadow border border-gray-200 whitespace-nowrap">
-            {labelText && <span className="text-gray-700">{labelText}</span>}
-            {gainText && <span className="ml-1 text-blue-600">({gainText})</span>}
+          <div className="bg-white dark:bg-gray-800 px-2 py-1 rounded text-xs shadow border border-gray-200 dark:border-gray-600 whitespace-nowrap">
+            {labelText && <span className="text-gray-700 dark:text-gray-300">{labelText}</span>}
+            {gainText && <span className="ml-1 text-blue-600 dark:text-blue-400">({gainText})</span>}
           </div>
         </div>
       </EdgeLabelRenderer>

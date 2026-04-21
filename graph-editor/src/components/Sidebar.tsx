@@ -13,25 +13,25 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-48 bg-white border-r border-gray-200 p-4 flex flex-col gap-3">
-      <h3 className="text-sm font-semibold text-gray-700 mb-2">元件库</h3>
+    <div className="w-48 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-3">
+      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">元件库</h3>
       {nodeTypes.map(node => (
         <div
           key={node.type}
-          className="bg-gray-50 border border-gray-300 rounded-lg p-3 cursor-move hover:bg-blue-50 hover:border-blue-400 transition-colors"
+          className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-3 cursor-move hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
           onDragStart={(event) => onDragStart(event, node.type)}
           draggable
         >
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-white border border-gray-300 rounded flex items-center justify-center font-bold text-gray-700">
+            <div className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded flex items-center justify-center font-bold text-gray-700 dark:text-gray-300">
               {node.icon}
             </div>
-            <span className="text-sm text-gray-800">{node.label}</span>
+            <span className="text-sm text-gray-800 dark:text-gray-200">{node.label}</span>
           </div>
         </div>
       ))}
-      <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500">
-        <p className="font-medium text-gray-600 mb-2">操作说明</p>
+      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+        <p className="font-medium text-gray-600 dark:text-gray-300 mb-2">操作说明</p>
         <p>📦 拖拽元件到画布</p>
         <p className="mt-1">🖱️ 双击节点/连线编辑属性</p>
         <p className="mt-1">🖱️ 右键拖拽框选</p>

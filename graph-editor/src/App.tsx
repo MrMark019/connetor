@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Button, message, Modal, Switch } from 'antd';
-import { DownloadOutlined, UploadOutlined, FileTextOutlined, BugOutlined, CopyOutlined } from '@ant-design/icons';
+import { DownloadOutlined, UploadOutlined, FileTextOutlined, BugOutlined, CopyOutlined, BulbOutlined } from '@ant-design/icons';
 import { ReactFlowProvider, Node, Edge } from '@xyflow/react';
 import Sidebar from './components/Sidebar';
 import Canvas from './components/Canvas';
@@ -16,6 +16,15 @@ const App: React.FC = () => {
   const [nlModalVisible, setNlModalVisible] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     if (!debugMode) return;
@@ -100,39 +109,46 @@ const App: React.FC = () => {
 
   return (
     <ReactFlowProvider>
-      <div className="flex h-screen w-screen bg-gray-100 overflow-hidden">
+      <div className="flex h-screen w-screen bg-gray-100 dark:bg-gray-900 overflow-hidden">
         <Sidebar />
         <div className="flex-1 flex flex-col h-full">
-          <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2 shrink-0">
-            <Button 
-              icon={<FileTextOutlined />} 
+          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2 shrink-0">
+            <Button
+              icon={<FileTextOutlined />}
               onClick={handleExportNL}
               type="primary"
             >
               导出描述
             </Button>
-            <Button 
-              icon={<DownloadOutlined />} 
+            <Button
+              icon={<DownloadOutlined />}
               onClick={handleExportJSON}
             >
               导出 JSON
             </Button>
-            <Button 
-              icon={<UploadOutlined />} 
+            <Button
+              icon={<UploadOutlined />}
               onClick={handleImportJSON}
             >
               导入 JSON
             </Button>
-            <div className="ml-auto flex items-center gap-2">
-              <BugOutlined className={debugMode ? 'text-red-500' : 'text-gray-400'} />
-              <span className="text-sm text-gray-600">调试模式</span>
-              <Switch checked={debugMode} onChange={setDebugMode} size="small" />
+            <div className="ml-auto flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <BulbOutlined className={darkMode ? 'text-yellow-400' : 'text-gray-400'} />
+                <span className="text-sm text-gray-600 dark:text-gray-300">深色模式</span>
+                <Switch checked={darkMode} onChange={setDarkMode} size="small" />
+              </div>
+              <div className="flex items-center gap-2">
+                <BugOutlined className={debugMode ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} />
+                <span className="text-sm text-gray-600 dark:text-gray-300">调试模式</span>
+                <Switch checked={debugMode} onChange={setDebugMode} size="small" />
+              </div>
             </div>
           </div>
           <div className="flex-1 h-0 flex">
             <div className="flex-1">
-              <Canvas 
-                onElementSelect={setSelectedElement} 
+              <Canvas
+                onElementSelect={setSelectedElement}
                 onSelectionChange={(nodes, edges) => {
                   if (nodes.length > 0 || edges.length > 0) {
                     console.log('选中:', nodes.length, '节点,', edges.length, '连线');
@@ -158,18 +174,18 @@ const App: React.FC = () => {
             )}
           </div>
         </div>
-        <PropertyPanel 
-          selectedElement={selectedElement} 
-          onClose={() => setSelectedElement(null)} 
+        <PropertyPanel
+          selectedElement={selectedElement}
+          onClose={() => setSelectedElement(null)}
         />
         <Modal
           title="自然语言描述"
           open={nlModalVisible}
           onCancel={() => setNlModalVisible(false)}
           footer={[
-            <Button 
-              key="copy" 
-              icon={<CopyOutlined />} 
+            <Button
+              key="copy"
+              icon={<CopyOutlined />}
               onClick={handleCopyNL}
             >
               复制
@@ -180,7 +196,7 @@ const App: React.FC = () => {
           ]}
           width={600}
         >
-          <pre className="bg-gray-50 p-4 rounded text-sm whitespace-pre-wrap font-sans">
+          <pre className="bg-gray-50 dark:bg-gray-800 dark:text-gray-200 p-4 rounded text-sm whitespace-pre-wrap font-sans">
             {nlDescription}
           </pre>
         </Modal>

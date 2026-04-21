@@ -25,3 +25,91 @@
   height: 12px;
   border-radius: 50%;
 }
+
+/* Dark mode overrides for React Flow */
+.dark .react-flow {
+  background-color: #1f2937;
+}
+
+.dark .react-flow__node {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.dark .react-flow__controls-button {
+  background-color: #374151;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+.dark .react-flow__controls-button:hover {
+  background-color: #4b5563;
+}
+
+.dark .react-flow__attribution a {
+  color: #9ca3af;
+}
+
+/* Ant Design dark mode overrides */
+.dark .ant-modal-content {
+  background-color: #1f2937;
+}
+
+.dark .ant-modal-header {
+  background-color: #1f2937;
+  border-bottom-color: #374151;
+}
+
+.dark .ant-modal-title {
+  color: #e5e7eb;
+}
+
+.dark .ant-modal-close {
+  color: #9ca3af;
+}
+
+.dark .ant-modal-close:hover {
+  color: #e5e7eb;
+}
+
+.dark .ant-form-item-label > label {
+  color: #d1d5db;
+}
+
+.dark .ant-input,
+.dark .ant-input-affix-wrapper,
+.dark .ant-select-selector,
+.dark .ant-input-textarea {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+
+.dark .ant-input::placeholder,
+.dark .ant-input-textarea::placeholder {
+  color: #6b7280;
+}
+
+.dark .ant-select-arrow {
+  color: #9ca3af;
+}
+
+.dark .ant-select-dropdown {
+  background-color: #374151;
+}
+
+.dark .ant-select-item {
+  color: #e5e7eb;
+}
+
+.dark .ant-select-item-option-active {
+  background-color: #4b5563;
+}
+
+.dark .ant-select-item-option-selected {
+  background-color: #1d4ed8;
+}
+
+.dark .ant-divider-plain.ant-divider-with-left {
+  color: #d1d5db;
+  border-color: #374151;
+}
