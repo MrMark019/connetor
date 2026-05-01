@@ -18,14 +18,18 @@ import '@xyflow/react/dist/style.css';
 import ResistorNode from './ResistorNode';
 import AndGateNode from './AndGateNode';
 import CustomModuleNode from './CustomModuleNode';
+import JunctionNode from './JunctionNode';
+import GNDNode from './GNDNode';
 import CustomEdge from './CustomEdge';
 import { useGraphStore } from '../store/graphStore';
-import { GraphData } from '../types/graph';
+import { GraphData, GraphMode } from '../types/graph';
 
 const nodeTypes = {
   resistor: ResistorNode,
   and_gate: AndGateNode,
   custom_module: CustomModuleNode,
+  junction: JunctionNode,
+  gnd: GNDNode,
 };
 
 const edgeTypes = {
@@ -49,14 +53,15 @@ const SelectionInfo: React.FC<{ selectedNodes: number; selectedEdges: number }> 
   return (
     <div className="bg-white dark:bg-gray-800 px-3 py-1.5 rounded shadow text-xs text-gray-600 dark:text-gray-300">
       已选中: {selectedNodes} 个节点, {selectedEdges} 条连线
-      <span className="ml-2 text-blue-600 dark:text-blue-400">Ctrl+C 复制 | Ctrl+V 粘贴 | Ctrl+Z 撤销 | Ctrl+Y 重做 | Delete 删除 | Space 旋转</span>
+      <span className="ml-2 text-blue-600 dark:text-blue-400">Ctrl+C 复制 | Ctrl+V 粘贴 | Ctrl+Z 撤销 | Ctrl+Y 重做 | Ctrl+R 重置 | Delete 删除 | Space 旋转 | J 插入节点</span>
     </div>
   );
 };
 
 const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) => {
-  const { graphData, setGraphData, setOnBeforeChange } = useGraphStore();
-  const { screenToFlowPosition } = useReactFlow();
+  const { graphData, setGraphData, setOnBeforeChange, addNet, generateNetId } = useGraphStore();
+  const mode = graphData.mode || 'direct';
+  const { screenToFlowPosition, updateNodeInternals } = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const nodeIdCounter = useRef(10);
   const isInitialized = useRef(false);
@@ -254,24 +259,56 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
       nodes: currentNodes,
       edges: currentEdges,
       meta: graphDataRef.current.meta || {},
+      nets: graphDataRef.current.nets || [],
+      mode: graphDataRef.current.mode || 'direct',
     }, true);
   }, [setGraphData]);
 
   const onConnect = useCallback(
     (params: Connection) => {
       pushHistory();
+
+      let netId: string | undefined;
+      let junctionTargetId: string | undefined;
+
+      if (mode === 'netlist') {
+        const sourceNode = nodesRef.current.find(n => n.id === params.source);
+        const targetNode = nodesRef.current.find(n => n.id === params.target);
+
+        if (sourceNode?.data?.netId) {
+          netId = sourceNode.data.netId;
+        } else if (targetNode?.data?.netId) {
+          netId = targetNode.data.netId;
+        } else if (sourceNode?.type === 'gnd' || targetNode?.type === 'gnd') {
+          netId = 'Net0';
+        } else {
+          netId = generateNetId();
+          addNet({ id: netId, name: netId });
+        }
+
+        if (targetNode?.type === 'junction' && !targetNode.data?.netId && netId) {
+          junctionTargetId = targetNode.id;
+        }
+      }
+
       const newEdge = {
         ...params,
         id: `e${Date.now()}`,
         type: 'custom',
         markerEnd: { type: MarkerType.ArrowClosed },
-        data: { gain: '+1', direction: 'forward' },
+        data: { gain: '+1', direction: 'forward', ...(netId ? { netId } : {}) },
       };
       setEdges((eds) => {
         const updatedEdges = addEdge(newEdge, eds);
         setTimeout(() => {
           setNodes((nds) => {
-            const currentNodes = nds.map(n => ({
+            let updatedNodes = nds;
+            if (junctionTargetId && netId) {
+              updatedNodes = nds.map(n =>
+                n.id === junctionTargetId ? { ...n, data: { ...n.data, netId } } : n
+              );
+            }
+            const currentNodes = updatedNodes.map(n => ({
               id: n.id,
               type: n.type || 'default',
               label: n.data?.label || n.id,
@@ -291,13 +328,13 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
               edges: currentEdges,
               meta: graphDataRef.current.meta || {},
             }, true);
-            return nds;
+            return updatedNodes;
           });
         }, 0);
         return updatedEdges;
       });
     },
-    [setEdges, setGraphData, setNodes, pushHistory]
+    [setEdges, setGraphData, setNodes, pushHistory, mode, addNet, generateNetId]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -321,6 +358,8 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
         resistor: '电阻',
         and_gate: '与门',
         custom_module: '模块',
+        gnd: 'GND',
+        junction: '节点',
       };
 
       const defaultPorts = type === 'custom_module' ? [
@@ -328,14 +367,131 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
         { id: 'out1', label: '输出', type: 'output' as const },
       ] : undefined;
 
+      let nodeData: any = {
+        label: `${typeLabels[type]}${nodeIdCounter.current - 1}`,
+        ...(defaultPorts && { ports: defaultPorts }),
+      };
+
+      if (type === 'gnd') {
+        nodeData = { label: 'GND' };
+        const nets = graphDataRef.current.nets || [];
+        if (!nets.find((n: any) => n.id === 'Net0')) {
+          addNet({ id: 'Net0', name: 'Net0' });
+        }
+      } else if (type === 'junction') {
+        nodeData = { label: '' };
+      }
+
+      let finalPosition = position;
+      let insertedEdges: Edge[] = [];
+      let removedEdgeId: string | undefined;
+
+      if (type === 'junction' && mode === 'netlist') {
+        let nearest: { edge: Edge; dist: number; midX: number; midY: number } | null = null;
+        for (const edge of edgesRef.current) {
+          const s = nodesRef.current.find(n => n.id === edge.source);
+          const t = nodesRef.current.find(n => n.id === edge.target);
+          if (!s || !t) continue;
+          const midX = (s.position.x + t.position.x) / 2;
+          const midY = (s.position.y + t.position.y) / 2;
+          const dist = Math.hypot(midX - position.x, midY - position.y);
+          if (!nearest || dist < nearest.dist) {
+            nearest = { edge, dist, midX, midY };
+          }
+        }
+        if (nearest && nearest.dist < 80) {
+          finalPosition = { x: nearest.midX, y: nearest.midY };
+          const edge = nearest.edge;
+          removedEdgeId = edge.id;
+
+          let netId = edge.data?.netId as string | undefined;
+          if (!netId) {
+            netId = generateNetId();
+            addNet({ id: netId, name: netId });
+          }
+          nodeData = { label: '', netId };
+
+          const junctionId = `${type}${nodeIdCounter.current++}`;
+          const edge1: Edge = {
+            id: `e${Date.now()}_1`,
+            source: edge.source,
+            target: junctionId,
+            sourceHandle: edge.sourceHandle,
+            targetHandle: 'in',
+            type: 'custom',
+            markerEnd: { type: MarkerType.ArrowClosed },
+            data: { ...(edge.data || {}), netId },
+          };
+          const edge2: Edge = {
+            id: `e${Date.now()}_2`,
+            source: junctionId,
+            target: edge.target,
+            sourceHandle: 'out',
+            targetHandle: edge.targetHandle,
+            type: 'custom',
+            markerEnd: { type: MarkerType.ArrowClosed },
+            data: { ...(edge.data || {}), netId },
+          };
+          insertedEdges = [edge1, edge2];
+
+          const junctionNode: Node = {
+            id: junctionId,
+            type: 'junction',
+            position: finalPosition,
+            data: nodeData,
+          };
+
+          pushHistory();
+          setNodes((nds) => nds.concat(junctionNode));
+          if (removedEdgeId) {
+            setEdges((eds) => {
+              const filtered = eds.filter(e => e.id !== removedEdgeId);
+              const updated = [...filtered, ...insertedEdges];
+              setTimeout(() => {
+                updateNodeInternals(junctionId);
+                const currentNodes = nodesRef.current.map(n => ({
+                  id: n.id,
+                  type: n.type || 'default',
+                  label: n.data?.label || n.id,
+                  position: n.position,
+                  data: n.data,
+                }));
+                const currentEdges = edgesRef.current.map(e => ({
+                  id: e.id,
+                  source: e.source,
+                  target: e.target,
+                  sourceHandle: e.sourceHandle,
+                  targetHandle: e.targetHandle,
+                  data: e.data || {},
+                }));
+                setGraphData({
+                  nodes: currentNodes,
+                  edges: currentEdges,
+                  meta: graphDataRef.current.meta || {},
+                }, true);
+              }, 50);
+              return updated;
+            });
+          }
+          setGraphData({
+            ...graphDataRef.current,
+            nodes: [...graphDataRef.current.nodes, {
+              id: junctionNode.id,
+              type: junctionNode.type || 'default',
+              label: junctionNode.data.label || junctionNode.id,
+              position: junctionNode.position,
+              data: junctionNode.data,
+            }],
+          }, true);
+          return;
+        }
+      }
+
       const newNode: Node = {
         id: `${type}${nodeIdCounter.current++}`,
         type,
-        position,
-        data: { 
-          label: `${typeLabels[type]}${nodeIdCounter.current - 1}`,
-          ...(defaultPorts && { ports: defaultPorts }),
-        },
+        position: finalPosition,
+        data: nodeData,
       };
 
       setNodes((nds) => nds.concat(newNode));
@@ -345,13 +501,13 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
         nodes: [...graphDataRef.current.nodes, {
           id: newNode.id,
           type: newNode.type || 'default',
-          label: newNode.data.label,
+          label: newNode.data.label || newNode.id,
           position: newNode.position,
           data: newNode.data,
         }],
       }, true);
     },
-    [setNodes, screenToFlowPosition, setGraphData, pushHistory]
+    [setNodes, screenToFlowPosition, setGraphData, pushHistory, addNet, generateNetId, mode, setEdges]
   );
 
   const onNodeClick = useCallback(
@@ -530,6 +686,24 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
 
     if (isInputFocused) return;
 
+    if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
+      event.preventDefault();
+      if (window.confirm('确定要完全重置画布吗？\n\n此操作将删除所有节点、连线和网表，且无法撤销。')) {
+        pushHistory();
+        setNodes([]);
+        setEdges([]);
+        setSelectedIds({ nodeIds: new Set(), edgeIds: new Set() });
+        setGraphData({
+          nodes: [],
+          edges: [],
+          nets: mode === 'netlist' ? [] : undefined,
+          meta: {},
+          mode,
+        }, true);
+      }
+      return;
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
       event.preventDefault();
       console.log('[Undo] Ctrl+Z pressed');
@@ -654,10 +828,120 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
       return;
     }
 
+    if (event.key === 'j' || event.key === 'J') {
+      event.preventDefault();
+      if (mode !== 'netlist') return;
+      if (selectedIds.edgeIds.size > 0) {
+        const edgeId = Array.from(selectedIds.edgeIds)[0];
+        const edge = edgesRef.current.find(e => e.id === edgeId);
+        if (!edge) return;
+
+        const sourceNode = nodesRef.current.find(n => n.id === edge.source);
+        const targetNode = nodesRef.current.find(n => n.id === edge.target);
+        if (!sourceNode || !targetNode) return;
+
+        const midX = (sourceNode.position.x + targetNode.position.x) / 2;
+        const midY = (sourceNode.position.y + targetNode.position.y) / 2;
+
+        let netId = edge.data?.netId as string | undefined;
+        if (!netId) {
+          netId = generateNetId();
+          addNet({ id: netId, name: netId });
+        }
+
+        const junctionId = `j${Date.now()}`;
+        const junctionNode: Node = {
+          id: junctionId,
+          type: 'junction',
+          position: { x: midX, y: midY },
+          data: { label: '', netId },
+        };
+
+        const edge1: Edge = {
+          id: `e${Date.now()}_1`,
+          source: edge.source,
+          target: junctionId,
+          sourceHandle: edge.sourceHandle,
+          targetHandle: 'in',
+          type: 'custom',
+          markerEnd: { type: MarkerType.ArrowClosed },
+          data: { ...(edge.data || {}), netId },
+        };
+
+        const edge2: Edge = {
+          id: `e${Date.now()}_2`,
+          source: junctionId,
+          target: edge.target,
+          sourceHandle: 'out',
+          targetHandle: edge.targetHandle,
+          type: 'custom',
+          markerEnd: { type: MarkerType.ArrowClosed },
+          data: { ...(edge.data || {}), netId },
+        };
+
+        pushHistory();
+        setNodes((nds) => [...nds, junctionNode]);
+        setEdges((eds) => {
+          const filtered = eds.filter(e => e.id !== edge.id);
+          const updated = [...filtered, edge1, edge2];
+          setTimeout(() => {
+            updateNodeInternals(junctionId);
+            const currentNodes = nodesRef.current.map(n => ({
+              id: n.id,
+              type: n.type || 'default',
+              label: n.data?.label || n.id,
+              position: n.position,
+              data: n.data,
+            }));
+            const currentEdges = edgesRef.current.map(e => ({
+              id: e.id,
+              source: e.source,
+              target: e.target,
+              sourceHandle: e.sourceHandle,
+              targetHandle: e.targetHandle,
+              data: e.data || {},
+            }));
+            setGraphData({
+              nodes: currentNodes,
+              edges: currentEdges,
+              meta: graphDataRef.current.meta || {},
+            }, true);
+          }, 50);
+          return updated;
+        });
+      }
+      return;
+    }
+
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (selectedIds.nodeIds.size > 0) {
         console.log('[Delete] Deleting nodes:', Array.from(selectedIds.nodeIds));
         console.log('[Delete] Current canvas nodes:', nodesRef.current.map(n => n.id));
+
+        const recoveryEdges: Edge[] = [];
+        if (mode === 'netlist') {
+          for (const nodeId of selectedIds.nodeIds) {
+            const node = nodesRef.current.find(n => n.id === nodeId);
+            if (node?.type === 'junction') {
+              const connectedEdges = edgesRef.current.filter(e => e.source === nodeId || e.target === nodeId);
+              const upstreamEdge = connectedEdges.find(e => e.target === nodeId);
+              const downstreamEdges = connectedEdges.filter(e => e.source === nodeId);
+              if (upstreamEdge && downstreamEdges.length > 0) {
+                recoveryEdges.push({
+                  id: `e${Date.now()}_${nodeId}`,
+                  source: upstreamEdge.source,
+                  target: downstreamEdges[0].target,
+                  sourceHandle: upstreamEdge.sourceHandle,
+                  targetHandle: downstreamEdges[0].targetHandle,
+                  type: 'custom',
+                  markerEnd: { type: MarkerType.ArrowClosed },
+                  data: upstreamEdge.data,
+                });
+              }
+            }
+          }
+        }
+
         pushHistory();
         setNodes((nds) => {
           const updatedNodes = nds.filter(n => !selectedIds.nodeIds.has(n.id));
@@ -665,11 +949,12 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
           return updatedNodes;
         });
         setEdges((eds) => {
-          const updatedEdges = eds.filter(e =>
+          let updatedEdges = eds.filter(e =>
             !selectedIds.nodeIds.has(e.source) &&
             !selectedIds.nodeIds.has(e.target) &&
             !selectedIds.edgeIds.has(e.id)
           );
+          updatedEdges = [...updatedEdges, ...recoveryEdges];
           setTimeout(() => {
             const currentNodes = nodesRef.current.filter(n => !selectedIds.nodeIds.has(n.id));
             const currentEdges = edgesRef.current.filter(e =>
@@ -677,7 +962,8 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
               !selectedIds.nodeIds.has(e.target) &&
               !selectedIds.edgeIds.has(e.id)
             );
-            console.log('[Delete] Syncing to store, nodes:', currentNodes.map(n => n.id), 'edges:', currentEdges.map(e => e.id));
+            const finalEdges = [...currentEdges, ...recoveryEdges];
+            console.log('[Delete] Syncing to store, nodes:', currentNodes.map(n => n.id), 'edges:', finalEdges.map(e => e.id));
             setGraphData({
               nodes: currentNodes.map(n => ({
                 id: n.id,
@@ -686,7 +972,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
                 position: n.position,
                 data: n.data,
               })),
-              edges: currentEdges.map(e => ({
+              edges: finalEdges.map(e => ({
                 id: e.id,
                 source: e.source,
                 target: e.target,

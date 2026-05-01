@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, Select, Divider, Tabs, Button, Space } from 'antd';
+import { Modal, Form, Input, Select, Divider, Tabs, Button, Space, message } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { Edge, Node } from '@xyflow/react';
@@ -12,9 +12,11 @@ interface PropertyPanelProps {
 
 const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement, onClose }) => {
   const [form] = Form.useForm();
-  const { updateNode, updateEdge, graphData } = useGraphStore();
+  const { updateNode, updateEdge, graphData, updateNet } = useGraphStore();
   const [visible, setVisible] = useState(false);
   const [ports, setPorts] = useState<Port[]>([]);
+  const [netName, setNetName] = useState('');
+  const mode = graphData.mode || 'direct';
 
   const connectionDescription = React.useMemo(() => {
     if (!selectedElement || !('source' in selectedElement)) return '';
@@ -52,6 +54,13 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement, onClose 
           customDescription: edge.data?.customDescription || '',
         });
         setPorts([]);
+        const nid = edge.data?.netId as string | undefined;
+        if (nid) {
+          const net = graphData.nets?.find(n => n.id === nid);
+          setNetName(net?.name || nid);
+        } else {
+          setNetName('');
+        }
       } else {
         const node = selectedElement as Node;
         form.setFieldsValue({
@@ -89,6 +98,21 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement, onClose 
       setVisible(false);
       onClose();
     });
+  };
+
+  const handleNetRename = () => {
+    if (!selectedElement || !('source' in selectedElement)) return;
+    const edge = selectedElement as Edge;
+    const netId = edge.data?.netId as string | undefined;
+    if (!netId || !netName.trim()) return;
+    const trimmed = netName.trim();
+    const existing = graphData.nets?.find(n => n.name === trimmed && n.id !== netId);
+    if (existing) {
+      message.warning('该网表名称已存在');
+      return;
+    }
+    updateNet(netId, { name: trimmed });
+    message.success('网表名称已更新');
   };
 
   const addPort = (type: 'input' | 'output') => {
@@ -221,10 +245,27 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ selectedElement, onClose 
           </>
         )}
 
+        {isEdge && mode === 'netlist' && netName && (
+          <>
+            <Divider orientation="left">网表信息</Divider>
+            <div className="flex items-center gap-2 mb-4">
+              <Input
+                value={netName}
+                onChange={(e) => setNetName(e.target.value)}
+                placeholder="网表名称"
+                size="small"
+              />
+              <Button type="primary" size="small" onClick={handleNetRename}>
+                重命名
+              </Button>
+            </div>
+          </>
+        )}
+
         {isEdge && (
           <>
             <Divider orientation="left">连线元数据</Divider>
-            
+
             <Form.Item name="direction" label="方向">
               <Select placeholder="选择方向">
                 <Select.Option value="forward">正向</Select.Option>

@@ -1,12 +1,25 @@
 import React from 'react';
+import { useGraphStore } from '../store/graphStore';
 
-const nodeTypes = [
+const directNodeTypes = [
   { type: 'resistor', label: '电阻', icon: 'R' },
   { type: 'and_gate', label: '与门', icon: '&' },
   { type: 'custom_module', label: '自定义模块', icon: 'M' },
 ];
 
+const netlistNodeTypes = [
+  { type: 'resistor', label: '电阻', icon: 'R' },
+  { type: 'and_gate', label: '与门', icon: '&' },
+  { type: 'custom_module', label: '自定义模块', icon: 'M' },
+  { type: 'gnd', label: 'GND', icon: 'GND' },
+  { type: 'junction', label: '节点', icon: 'J' },
+];
+
 const Sidebar: React.FC = () => {
+  const { graphData } = useGraphStore();
+  const mode = graphData.mode || 'direct';
+  const nodeTypes = mode === 'netlist' ? netlistNodeTypes : directNodeTypes;
+
   const onDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
@@ -14,7 +27,9 @@ const Sidebar: React.FC = () => {
 
   return (
     <div className="w-48 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-3">
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">元件库</h3>
+      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+        元件库 {mode === 'netlist' && <span className="text-[10px] text-orange-500 font-normal">(网表)</span>}
+      </h3>
       {nodeTypes.map(node => (
         <div
           key={node.type}
@@ -23,7 +38,7 @@ const Sidebar: React.FC = () => {
           draggable
         >
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded flex items-center justify-center font-bold text-gray-700 dark:text-gray-300">
+            <div className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded flex items-center justify-center font-bold text-gray-700 dark:text-gray-300 text-xs">
               {node.icon}
             </div>
             <span className="text-sm text-gray-800 dark:text-gray-200">{node.label}</span>
@@ -38,6 +53,13 @@ const Sidebar: React.FC = () => {
         <p className="mt-1">🖱️ 左键拖拽平移画布</p>
         <p className="mt-1">🔄 滚轮缩放</p>
         <p className="mt-1">⌨️ Delete 删除选中项</p>
+        {mode === 'netlist' && (
+          <>
+            <p className="mt-1">🔌 选中导线按 J 插入节点</p>
+            <p className="mt-1">🔌 拖放节点到导线附近自动插入</p>
+            <p className="mt-1">🔌 从节点拖出分支连线</p>
+          </>
+        )}
       </div>
     </div>
   );

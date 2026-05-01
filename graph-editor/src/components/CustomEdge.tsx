@@ -7,6 +7,7 @@ interface CustomEdgeProps extends EdgeProps {
     direction?: string;
     label?: string;
     signalType?: string;
+    netId?: string;
   };
 }
 
@@ -33,6 +34,7 @@ const CustomEdge: React.FC<CustomEdgeProps> = ({
 
   const labelText = data?.label || '';
   const gainText = data?.gain || '';
+  const netId = data?.netId;
 
   return (
     <>
@@ -49,6 +51,11 @@ const CustomEdge: React.FC<CustomEdgeProps> = ({
           <div className="bg-white dark:bg-gray-800 px-2 py-1 rounded text-xs shadow border border-gray-200 dark:border-gray-600 whitespace-nowrap">
             {labelText && <span className="text-gray-700 dark:text-gray-300">{labelText}</span>}
             {gainText && <span className="ml-1 text-blue-600 dark:text-blue-400">({gainText})</span>}
+            {netId && (
+              <span className="ml-1 px-1 py-0.5 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded text-[10px] font-medium">
+                {netId}
+              </span>
+            )}
           </div>
         </div>
       </EdgeLabelRenderer>

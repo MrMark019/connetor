@@ -1,7 +1,14 @@
+export type GraphMode = 'direct' | 'netlist';
+
 export interface Port {
   id: string;
   label: string;
   type: 'input' | 'output';
+}
+
+export interface Net {
+  id: string;
+  name: string;
 }
 
 export interface NodeData {
@@ -10,6 +17,7 @@ export interface NodeData {
   description?: string;
   ports?: Port[];
   rotation?: number;
+  netId?: string;
   [key: string]: any;
 }
 
@@ -22,10 +30,12 @@ export interface EdgeData {
   weight?: number | string;
   condition?: string;
   customDescription?: string;
+  netId?: string;
   [key: string]: any;
 }
 
 export interface GraphData {
+  mode?: GraphMode;
   nodes: Array<{
     id: string;
     type: string;
@@ -41,9 +51,11 @@ export interface GraphData {
     targetHandle?: string;
     data: EdgeData;
   }>;
+  nets?: Net[];
   meta?: {
     exportNL?: string;
     notes?: string;
+    nlFormat?: 'edge' | 'net';
     [key: string]: any;
   };
 }

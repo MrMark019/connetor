@@ -10,13 +10,14 @@ import { exportToText } from './utils/nlg';
 import { GraphData } from './types/graph';
 
 const App: React.FC = () => {
-  const { graphData, importGraph } = useGraphStore();
+  const { graphData, importGraph, setMode, setGraphData } = useGraphStore();
   const [selectedElement, setSelectedElement] = useState<Node | Edge | null>(null);
   const [nlDescription, setNlDescription] = useState('');
   const [nlModalVisible, setNlModalVisible] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [darkMode, setDarkMode] = useState(false);
+  const currentMode = graphData.mode || 'direct';
 
   useEffect(() => {
     if (darkMode) {
@@ -60,6 +61,20 @@ const App: React.FC = () => {
     setNlModalVisible(true);
   }, [graphData]);
 
+  const handleToggleNLFormat = useCallback(() => {
+    if (currentMode !== 'netlist') return;
+    const currentFormat = graphData.meta?.nlFormat || 'net';
+    const newFormat = currentFormat === 'net' ? 'edge' : 'net';
+    setGraphData({
+      ...graphData,
+      meta: {
+        ...graphData.meta,
+        nlFormat: newFormat,
+      },
+    }, true);
+    message.success(`已切换为${newFormat === 'net' ? '网表' : '连线'}描述格式`);
+  }, [graphData, setGraphData, currentMode]);
+
   const handleCopyNL = useCallback(() => {
     navigator.clipboard.writeText(nlDescription).then(() => {
       message.success('已复制到剪贴板');
@@ -96,6 +111,12 @@ const App: React.FC = () => {
             message.error('无效的图数据格式');
             return;
           }
+          const fileMode = data.mode || 'direct';
+          const currentMode = graphData.mode || 'direct';
+          if (fileMode !== currentMode) {
+            message.error(`文件模式为 ${fileMode === 'netlist' ? '网表' : '直连'} 模式，与当前模式不匹配`);
+            return;
+          }
           importGraph(data);
           message.success('JSON 导入成功');
         } catch (error) {
@@ -105,7 +126,42 @@ const App: React.FC = () => {
       reader.readAsText(file);
     };
     input.click();
-  }, [importGraph]);
+  }, [importGraph, graphData.mode]);
+
+  const handleToggleMode = useCallback(() => {
+    const hasContent = graphData.nodes.length > 0 || graphData.edges.length > 0;
+    if (hasContent) {
+      Modal.confirm({
+        title: '切换模式',
+        content: '切换模式将清空当前画布，是否继续？',
+        okText: '继续',
+        cancelText: '取消',
+        onOk: () => {
+          const newMode = currentMode === 'direct' ? 'netlist' : 'direct';
+          setGraphData({
+            mode: newMode,
+            nodes: [],
+            edges: [],
+            nets: newMode === 'netlist' ? [] : undefined,
+            meta: {},
+          });
+          setMode(newMode);
+          message.success(`已切换到 ${newMode === 'netlist' ? '网表' : '直连'} 模式`);
+        },
+      });
+    } else {
+      const newMode = currentMode === 'direct' ? 'netlist' : 'direct';
+      setGraphData({
+        mode: newMode,
+        nodes: [],
+        edges: [],
+        nets: newMode === 'netlist' ? [] : undefined,
+        meta: {},
+      });
+      setMode(newMode);
+      message.success(`已切换到 ${newMode === 'netlist' ? '网表' : '直连'} 模式`);
+    }
+  }, [currentMode, graphData.nodes.length, graphData.edges.length, setGraphData, setMode]);
 
   return (
     <ReactFlowProvider>
@@ -120,6 +176,14 @@ const App: React.FC = () => {
             >
               导出描述
             </Button>
+            {currentMode === 'netlist' && (
+              <Button
+                size="small"
+                onClick={handleToggleNLFormat}
+              >
+                {(graphData.meta?.nlFormat || 'net') === 'net' ? '网表描述' : '连线描述'}
+              </Button>
+            )}
             <Button
               icon={<DownloadOutlined />}
               onClick={handleExportJSON}
@@ -132,6 +196,14 @@ const App: React.FC = () => {
             >
               导入 JSON
             </Button>
+            <Button
+              onClick={handleToggleMode}
+              type={currentMode === 'netlist' ? 'primary' : 'default'}
+              danger={currentMode === 'netlist'}
+            >
+              {currentMode === 'netlist' ? '网表模式' : '直连模式'}
+            </Button>
+
             <div className="ml-auto flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <BulbOutlined className={darkMode ? 'text-yellow-400' : 'text-gray-400'} />
