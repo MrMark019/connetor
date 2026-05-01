@@ -49,7 +49,7 @@ const SelectionInfo: React.FC<{ selectedNodes: number; selectedEdges: number }> 
   return (
     <div className="bg-white dark:bg-gray-800 px-3 py-1.5 rounded shadow text-xs text-gray-600 dark:text-gray-300">
       已选中: {selectedNodes} 个节点, {selectedEdges} 条连线
-      <span className="ml-2 text-blue-600 dark:text-blue-400">Ctrl+C 复制 | Ctrl+V 粘贴 | Ctrl+Z 撤销 | Ctrl+Y 重做 | Delete 删除</span>
+      <span className="ml-2 text-blue-600 dark:text-blue-400">Ctrl+C 复制 | Ctrl+V 粘贴 | Ctrl+Z 撤销 | Ctrl+Y 重做 | Delete 删除 | Space 旋转</span>
     </div>
   );
 };
@@ -417,6 +417,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
           ...node,
           id: newId,
           position: { ...targetNode.position },
+          data: JSON.parse(JSON.stringify(node.data)),
         };
       });
 
@@ -591,6 +592,7 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
               x: node.position.x + 30,
               y: node.position.y + 30,
             },
+            data: JSON.parse(JSON.stringify(node.data)),
           };
         });
 
@@ -608,6 +610,46 @@ const Canvas: React.FC<CanvasProps> = ({ onElementSelect, onSelectionChange }) =
             })),
           ],
         }, true);
+      }
+      return;
+    }
+
+    if (event.key === ' ' || event.code === 'Space') {
+      event.preventDefault();
+      if (selectedIds.nodeIds.size > 0) {
+        pushHistory();
+        setNodes((nds) => {
+          const updated = nds.map(n => {
+            if (selectedIds.nodeIds.has(n.id)) {
+              const currentRotation = ((n.data?.rotation || 0) as number) % 4;
+              return { ...n, data: { ...n.data, rotation: (currentRotation + 1) % 4 } };
+            }
+            return n;
+          });
+          setTimeout(() => {
+            const currentNodes = updated.map(n => ({
+              id: n.id,
+              type: n.type || 'default',
+              label: n.data?.label || n.id,
+              position: n.position,
+              data: n.data,
+            }));
+            const currentEdges = edgesRef.current.map(e => ({
+              id: e.id,
+              source: e.source,
+              target: e.target,
+              sourceHandle: e.sourceHandle,
+              targetHandle: e.targetHandle,
+              data: e.data || {},
+            }));
+            setGraphData({
+              nodes: currentNodes,
+              edges: currentEdges,
+              meta: graphDataRef.current.meta || {},
+            }, true);
+          }, 0);
+          return updated;
+        });
       }
       return;
     }

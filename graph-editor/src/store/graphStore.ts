@@ -70,9 +70,15 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     return set((state) => ({
       graphData: {
         ...state.graphData,
-        nodes: state.graphData.nodes.map(n => 
-          n.id === id ? { ...n, data: { ...n.data, ...data } } : n
-        ),
+        nodes: state.graphData.nodes.map(n => {
+          if (n.id !== id) return n;
+          const updatedData = { ...n.data, ...data };
+          const updatedNode: typeof n = { ...n, data: updatedData };
+          if (data.label !== undefined) {
+            updatedNode.label = data.label;
+          }
+          return updatedNode;
+        }),
       },
     }));
   },

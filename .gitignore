@@ -4,5 +4,9 @@ release/
 *.log
 .DS_Store
 .claude/
+debug/
 debug_report.md
 image.png
+reason.md
+JSON相关.md
+*.json

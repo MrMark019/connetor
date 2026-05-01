@@ -9,6 +9,7 @@ export interface NodeData {
   type: string;
   description?: string;
   ports?: Port[];
+  rotation?: number;
   [key: string]: any;
 }
 
